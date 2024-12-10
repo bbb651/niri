@@ -3,6 +3,7 @@ use zbus::object_server::Interface;
 
 use crate::niri::State;
 
+pub mod freedesktop_notifications;
 pub mod freedesktop_screensaver;
 pub mod gnome_shell_introspect;
 pub mod gnome_shell_screenshot;
@@ -14,6 +15,7 @@ pub mod mutter_screen_cast;
 #[cfg(feature = "xdp-gnome-screencast")]
 use mutter_screen_cast::ScreenCast;
 
+use self::freedesktop_notifications::Notifications;
 use self::freedesktop_screensaver::ScreenSaver;
 use self::gnome_shell_introspect::Introspect;
 use self::mutter_display_config::DisplayConfig;
