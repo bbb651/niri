@@ -9,9 +9,9 @@ use std::path::PathBuf;
 use std::process::Command;
 use std::{env, mem};
 
-use clap::Parser;
+use clap::{CommandFactory, Parser};
 use directories::ProjectDirs;
-use niri::cli::{Cli, Sub};
+use niri::cli::{Cli, Msg, Sub, SubcommandOrHelp};
 #[cfg(feature = "dbus")]
 use niri::dbus;
 use niri::ipc::client::handle_msg;
@@ -26,6 +26,7 @@ use niri_config::Config;
 use niri_ipc::socket::SOCKET_PATH_ENV;
 use portable_atomic::Ordering;
 use sd_notify::NotifyState;
+use serde::Serialize;
 use smithay::reexports::calloop::EventLoop;
 use smithay::reexports::wayland_server::Display;
 use tracing_subscriber::EnvFilter;
@@ -66,6 +67,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .init();
 
     let cli = Cli::parse();
+    let mut command = Cli::command();
 
     if cli.session {
         // If we're starting as a session, assume that the intention is to start on a TTY. Remove
@@ -100,7 +102,82 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 info!("config is valid");
                 return Ok(());
             }
-            Sub::Msg { msg, json } => {
+            Sub::Msg { msg: None, .. } => {
+                let subcommand = command.find_subcommand_mut("msg").unwrap();
+                subcommand.print_help().unwrap();
+                return Ok(());
+            }
+            Sub::Msg {
+                msg: Some(SubcommandOrHelp::Help),
+                json,
+            } => {
+                let subcommand = command.find_subcommand_mut("msg").unwrap();
+                if json {
+                    #[derive(Serialize)]
+                    struct ActionJson<'a> {
+                        name: &'a str,
+                        description: Option<String>,
+                    }
+                    let actions = subcommand
+                        .get_subcommands()
+                        .map(|action| ActionJson {
+                            name: action.get_name(),
+                            description: action.get_about().map(|about| format!("{about}")),
+                        })
+                        .collect::<Vec<_>>();
+                    serde_json::to_writer(std::io::stdout(), &actions).unwrap();
+                } else {
+                    subcommand.print_help().unwrap();
+                }
+                return Ok(());
+            }
+            Sub::Msg {
+                msg: Some(SubcommandOrHelp::Subcommand(Msg::Action { action: None, .. })),
+                ..
+            } => {
+                let subcommand = command
+                    .find_subcommand_mut("msg")
+                    .unwrap()
+                    .find_subcommand_mut("action")
+                    .unwrap();
+                subcommand.print_help().unwrap();
+                return Ok(());
+            }
+            Sub::Msg {
+                msg:
+                    Some(SubcommandOrHelp::Subcommand(Msg::Action {
+                        action: Some(SubcommandOrHelp::Help),
+                    })),
+                json,
+            } => {
+                let subcommand = command
+                    .find_subcommand_mut("msg")
+                    .unwrap()
+                    .find_subcommand_mut("action")
+                    .unwrap();
+                if json {
+                    #[derive(Serialize)]
+                    struct ActionJson<'a> {
+                        name: &'a str,
+                        description: Option<String>,
+                    }
+                    let actions = subcommand
+                        .get_subcommands()
+                        .map(|action| ActionJson {
+                            name: action.get_name(),
+                            description: action.get_about().map(|about| format!("{about}")),
+                        })
+                        .collect::<Vec<_>>();
+                    serde_json::to_writer(std::io::stdout(), &actions).unwrap();
+                } else {
+                    subcommand.print_help().unwrap();
+                }
+                return Ok(());
+            }
+            Sub::Msg {
+                msg: Some(SubcommandOrHelp::Subcommand(msg)),
+                json,
+            } => {
                 handle_msg(msg, json)?;
                 return Ok(());
             }

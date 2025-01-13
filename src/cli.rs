@@ -38,7 +38,7 @@ pub enum Sub {
     /// Communicate with the running niri instance.
     Msg {
         #[command(subcommand)]
-        msg: Msg,
+        msg: Option<SubcommandOrHelp<Msg>>,
         /// Format output as JSON.
         #[arg(short, long)]
         json: bool,
@@ -75,7 +75,7 @@ pub enum Msg {
     /// Perform an action.
     Action {
         #[command(subcommand)]
-        action: Action,
+        action: Option<SubcommandOrHelp<Action>>,
     },
     /// Change output configuration temporarily.
     ///
@@ -98,4 +98,12 @@ pub enum Msg {
     Version,
     /// Request an error from the running niri instance.
     RequestError,
+}
+
+#[derive(Debug, Subcommand)]
+#[command(disable_help_subcommand(true))]
+pub enum SubcommandOrHelp<T: Subcommand> {
+    #[command(flatten)]
+    Subcommand(T),
+    Help,
 }

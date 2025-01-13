@@ -10,7 +10,7 @@ use niri_ipc::{
 };
 use serde_json::json;
 
-use crate::cli::Msg;
+use crate::cli::{Msg, SubcommandOrHelp};
 use crate::utils::version;
 
 pub fn handle_msg(msg: Msg, json: bool) -> anyhow::Result<()> {
@@ -19,7 +19,10 @@ pub fn handle_msg(msg: Msg, json: bool) -> anyhow::Result<()> {
         Msg::Outputs => Request::Outputs,
         Msg::FocusedWindow => Request::FocusedWindow,
         Msg::FocusedOutput => Request::FocusedOutput,
-        Msg::Action { action } => Request::Action(action.clone()),
+        Msg::Action {
+            action: Some(SubcommandOrHelp::Subcommand(action)),
+        } => Request::Action(action.clone()),
+        Msg::Action { action: _ } => unreachable!(),
         Msg::Output { output, action } => Request::Output {
             output: output.clone(),
             action: action.clone(),
