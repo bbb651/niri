@@ -361,6 +361,15 @@ impl State {
                     }
                 }
 
+                if let Some(tx) = this
+                    .niri
+                    .pick_window
+                    .take_if(move |_| raw == Some(Keysym::Escape))
+                {
+                    let _ = tx.send_blocking(None);
+                    return FilterResult::Intercept(None);
+                }
+
                 should_intercept_key(
                     &mut this.niri.suppressed_keys,
                     bindings,
@@ -1832,6 +1841,14 @@ impl State {
             // We received an event for the regular pointer, so show it now.
             self.niri.pointer_hidden = false;
             self.niri.tablet_cursor_location = None;
+
+            if let Some(tx) = self.niri.pick_window.take() {
+                if let Some(mapped_id) = self.niri.window_under_cursor().map(|mapped| mapped.id()) {
+                    let _ = tx.send_blocking(Some(mapped_id));
+                    return;
+                }
+                self.niri.pick_window = Some(tx);
+            }
 
             if let Some(mapped) = self.niri.window_under_cursor() {
                 let window = mapped.window.clone();
