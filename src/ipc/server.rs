@@ -312,7 +312,7 @@ async fn process(ctx: &ClientCtx, request: Request) -> Reply {
         Request::PickWindow => {
             let (tx, rx) = async_channel::bounded(1);
             ctx.event_loop.insert_idle(move |state| {
-                state.niri.pick_window = Some(tx);
+                state.niri.pick_window.push_back(tx);
             });
             let result = rx.recv().await;
             let id = result.map_err(|_| String::from("error getting picked window info"))?;

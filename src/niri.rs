@@ -1,5 +1,5 @@
 use std::cell::{Cell, OnceCell, RefCell};
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::ffi::OsString;
 use std::path::PathBuf;
 use std::rc::Rc;
@@ -333,7 +333,7 @@ pub struct Niri {
     pub hotkey_overlay: HotkeyOverlay,
     pub exit_confirm_dialog: Option<ExitConfirmDialog>,
 
-    pub pick_window: Option<async_channel::Sender<Option<MappedId>>>,
+    pub pick_window: VecDeque<async_channel::Sender<Option<MappedId>>>,
 
     pub debug_draw_opaque_regions: bool,
     pub debug_draw_damage: bool,
@@ -2078,7 +2078,7 @@ impl Niri {
             hotkey_overlay,
             exit_confirm_dialog,
 
-            pick_window: None,
+            pick_window: VecDeque::new(),
 
             debug_draw_opaque_regions: false,
             debug_draw_damage: false,
