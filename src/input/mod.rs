@@ -2,6 +2,7 @@ use std::any::Any;
 use std::cmp::min;
 use std::collections::hash_map::Entry;
 use std::collections::HashSet;
+use std::sync::Mutex;
 use std::time::Duration;
 
 use calloop::timer::{TimeoutAction, Timer};
@@ -30,6 +31,7 @@ use smithay::input::touch::{
 use smithay::input::SeatHandler;
 use smithay::output::Output;
 use smithay::utils::{Logical, Point, Rectangle, Transform, SERIAL_COUNTER};
+use smithay::wayland::compositor::with_states;
 use smithay::wayland::keyboard_shortcuts_inhibit::KeyboardShortcutsInhibitor;
 use smithay::wayland::pointer_constraints::{with_pointer_constraint, PointerConstraint};
 use smithay::wayland::tablet_manager::{TabletDescriptor, TabletSeatTrait};
@@ -79,6 +81,29 @@ impl<D: SeatHandler> PointerOrTouchStartData<D> {
         match self {
             PointerOrTouchStartData::Pointer(x) => x.location,
             PointerOrTouchStartData::Touch(x) => x.location,
+        }
+    }
+}
+
+/// Keys pressed and not released while the surface has keyboard focus.
+///
+/// Key release events are only fired for these keys.
+#[derive(Debug, Default)]
+pub struct PressedKeys(HashSet<Keycode>);
+
+impl PressedKeys {
+    fn should_intercept_key(
+        &mut self,
+        key_code: Keycode,
+        pressed: bool,
+    ) -> FilterResult<Option<Bind>> {
+        if pressed {
+            self.0.insert(key_code);
+            FilterResult::Forward
+        } else if self.0.remove(&key_code) {
+            FilterResult::Forward
+        } else {
+            FilterResult::Intercept(None)
         }
     }
 }
@@ -383,7 +408,7 @@ impl State {
                     }
                 }
 
-                should_intercept_key(
+                match should_intercept_key(
                     &mut this.niri.suppressed_keys,
                     bindings,
                     comp_mod,
@@ -395,7 +420,28 @@ impl State {
                     &this.niri.screenshot_ui,
                     this.niri.config.borrow().input.disable_power_key_handling,
                     is_inhibiting_shortcuts,
-                )
+                ) {
+                    // Avoid sending key release if the surface didn't receive a key press before.
+                    // This avoids situations like closing fuzeel with escape, which closes it on
+                    // key press and subsequently switches focus, and than releasing escape sends
+                    // a key release to a different application (like a fullscreen browser video).
+                    FilterResult::Forward => this
+                        .niri
+                        .keyboard_focus
+                        .surface()
+                        .map(|surface| {
+                            with_states(surface, |states| {
+                                states
+                                    .data_map
+                                    .get_or_insert(Mutex::<PressedKeys>::default)
+                                    .lock()
+                                    .unwrap()
+                                    .should_intercept_key(key_code, pressed)
+                            })
+                        })
+                        .unwrap_or(FilterResult::Forward),
+                    FilterResult::Intercept(bind) => FilterResult::Intercept(bind),
+                }
             },
         ) else {
             return;
